@@ -57,7 +57,8 @@ public class KromLoadoutsPanel {
     let frame = new inkCanvas();
     frame.SetAnchor(inkEAnchor.Centered);
     frame.SetAnchorPoint(Vector2(0.5, 0.5));
-    frame.SetSize(Vector2(2300.0, 1400.0));
+    // Tall enough for 10 set rows above the rename and action rows.
+    frame.SetSize(Vector2(2300.0, 1800.0));
     frame.Reparent(overlay);
 
     let frameBg = new inkRectangle();
@@ -225,7 +226,7 @@ public class KromLoadoutsPanel {
     return false;
   }
 
-  private static func ItemName(item: ItemID) -> String {
+  public static func ItemName(item: ItemID) -> String {
     let record = RPGManager.GetItemRecord(item);
     if IsDefined(record) {
       let name = GetLocalizedTextByKey(record.DisplayName());
@@ -291,23 +292,31 @@ public class KromLoadoutsPanel {
     if this.m_selected < 0 || this.m_selected >= ArraySize(sets) {
       return false;
     }
-    let name = sets[this.m_selected].name;
     let owner = this.m_owner;
-    let plan = owner.KromApplySet(this.m_selected);
-    if !IsDefined(plan) {
-      return false;
+    if owner.KromStartApply(this.m_selected) {
+      this.Say(KromText.Loading());
+      this.SetActionsEnabled(false);
     }
-    let missing = plan.missing;
+  }
+
+  // Called by the ripperdoc controller when a load started by OnLoad has finished.
+  public func OnApplyFinished(name: String, missing: array<String>) -> Void {
     if ArraySize(missing) == 0 {
       this.Say(KromText.Loaded(name));
     } else {
-      let names: array<String>;
-      for m in missing {
-        ArrayPush(names, KromLoadoutsPanel.ItemName(m.item));
-      }
-      this.Say(KromText.LoadedWithMissing(name, names));
+      this.Say(KromText.LoadedWithMissing(name, missing));
     }
     this.Refresh();
+  }
+
+  private func SetActionsEnabled(enabled: Bool) -> Void {
+    for button in this.m_actionButtons {
+      button.SetDisabled(!enabled);
+    }
+    for button in this.m_setButtons {
+      button.SetDisabled(!enabled);
+    }
+    this.m_newButton.SetDisabled(!enabled);
   }
 
   protected cb func OnOverwrite(widget: wref<inkWidget>) -> Bool {

@@ -84,81 +84,147 @@ public func KromSaveCurrent(index: Int32, name: String) -> Bool {
   return KromSetleriSystem.Get(this.m_player.GetGame()).SaveSet(index, name, current);
 }
 
-// Points the screen's equip logic at one area/slot, the way hovering it in the UI would.
-@addMethod(RipperDocGameController)
-private func KromTarget(entry: KromSlotItem) -> wref<gameItemData> {
-  this.m_hoverArea = entry.area;
-  this.m_equippedSlotIndex = entry.slot;
-  let player = this.m_player;
-  return GameInstance.GetTransactionSystem(player.GetGame()).GetItemData(player, entry.item);
+// --- Loading a set, one piece at a time -------------------------------------------------------
+// Vanilla equip requests are processed later and the slot grid only refreshes afterwards, so
+// doing a whole set in one call works on stale state. Each removal or install therefore runs on
+// its own step, a few UI frames apart; removals all go first so capacity frees up. What did not
+// get installed is worked out at the end from what is really installed.
+
+public class KromApplyStepEvent extends Event {
+  public let wait: Int32;
 }
 
-// Loads set `index`. Pairs that change the same area and slot are swapped in one vanilla call;
-// pure removals run before pure installs so capacity frees up first. Anything that could not be
-// installed ends up in the returned plan's `missing`.
+@addField(RipperDocGameController)
+private let m_kromQueue: array<KromSlotItem>;
+
+@addField(RipperDocGameController)
+private let m_kromQueueIsInstall: array<Bool>;
+
+@addField(RipperDocGameController)
+private let m_kromTarget: array<KromSlotItem>;
+
+@addField(RipperDocGameController)
+private let m_kromTargetName: String;
+
+@addField(RipperDocGameController)
+private let m_kromBusy: Bool;
+
+@addField(RipperDocGameController)
+private let m_kromSavedHoverArea: gamedataEquipmentArea;
+
+@addField(RipperDocGameController)
+private let m_kromSavedSlotIndex: Int32;
+
 @addMethod(RipperDocGameController)
-public func KromApplySet(index: Int32) -> ref<KromPlan> {
+public func KromIsLoading() -> Bool {
+  return this.m_kromBusy;
+}
+
+// Starts loading set `index`; the panel's OnApplyFinished is called when it is done.
+@addMethod(RipperDocGameController)
+public func KromStartApply(index: Int32) -> Bool {
+  if this.m_kromBusy {
+    return false;
+  }
   let sets = KromSetleriSystem.Get(this.m_player.GetGame()).GetSets();
   if index < 0 || index >= ArraySize(sets) {
-    return null;
+    return false;
   }
-  let target = sets[index];
+  let chosen = sets[index];
   let equipped = this.KromCurrentCyberware();
   let owned = this.KromOwnedCyberware();
-  let plan = KromPlanLoadout(equipped, target.items, owned);
+  let plan = KromPlanLoadout(equipped, chosen.items, owned);
 
-  let unequip = plan.unequip;
-  let equip = plan.equip;
-  let swapped: array<Bool>;
-  for e in equip {
-    ArrayPush(swapped, false);
+  ArrayClear(this.m_kromQueue);
+  ArrayClear(this.m_kromQueueIsInstall);
+  let removals = plan.unequip;
+  for r in removals {
+    ArrayPush(this.m_kromQueue, r);
+    ArrayPush(this.m_kromQueueIsInstall, false);
   }
+  let installs = plan.equip;
+  for e in installs {
+    ArrayPush(this.m_kromQueue, e);
+    ArrayPush(this.m_kromQueueIsInstall, true);
+  }
+  this.m_kromTarget = chosen.items;
+  this.m_kromTargetName = chosen.name;
+  this.m_kromSavedHoverArea = this.m_hoverArea;
+  this.m_kromSavedSlotIndex = this.m_equippedSlotIndex;
+  this.m_kromBusy = true;
+  this.KromQueueStep(0);
+  return true;
+}
 
-  // Pure removals first.
-  for u in unequip {
-    let pair = -1;
-    let i = 0;
-    while i < ArraySize(equip) {
-      if pair < 0 && !swapped[i] && Equals(equip[i].area, u.area) && equip[i].slot == u.slot {
-        pair = i;
-      }
-      i += 1;
-    }
-    if pair < 0 {
-      let old = this.KromTarget(u);
-      if IsDefined(old) {
-        this.UnequipCyberware(old, null, true);
+@addMethod(RipperDocGameController)
+private func KromQueueStep(wait: Int32) -> Void {
+  let evt = new KromApplyStepEvent();
+  evt.wait = wait;
+  this.QueueEvent(evt);
+}
+
+@addMethod(RipperDocGameController)
+protected cb func OnKromApplyStep(evt: ref<KromApplyStepEvent>) -> Bool {
+  if !this.m_kromBusy {
+    return false;
+  }
+  if evt.wait > 0 {
+    this.KromQueueStep(evt.wait - 1);
+    return true;
+  }
+  if ArraySize(this.m_kromQueue) == 0 {
+    this.KromFinishApply();
+    return true;
+  }
+  let entry = this.m_kromQueue[0];
+  let isInstall = this.m_kromQueueIsInstall[0];
+  ArrayErase(this.m_kromQueue, 0);
+  ArrayErase(this.m_kromQueueIsInstall, 0);
+
+  let player = this.m_player;
+  let data = EquipmentSystem.GetData(player);
+  let itemData = GameInstance.GetTransactionSystem(player.GetGame()).GetItemData(player, entry.item);
+  if IsDefined(itemData) {
+    // The screen's equip logic reads the hovered area, as if the player pointed at it.
+    this.m_hoverArea = entry.area;
+    if isInstall {
+      if !data.IsEquipped(entry.item) && this.CheckIfCanEquip(itemData, entry.area) {
+        this.EquipCyberware(itemData);
       }
     } else {
-      swapped[pair] = true;
-    }
-  }
-
-  // Swaps in place, then pure installs.
-  let k = 0;
-  while k < ArraySize(equip) {
-    let e = equip[k];
-    let ok = false;
-    let next = this.KromTarget(e);
-    if IsDefined(next) {
-      if swapped[k] {
-        let player = this.m_player;
-        let oldId = EquipmentSystem.GetData(player).GetItemInEquipSlot(e.area, e.slot);
-        let old = GameInstance.GetTransactionSystem(player.GetGame()).GetItemData(player, oldId);
-        ok = IsDefined(old) && this.CheckIfCanEquip(next, old) && this.UnequipCyberware(old, next, true);
-      } else {
-        ok = this.CheckIfCanEquip(next, e.area) && this.EquipCyberware(next);
+      if data.IsEquipped(entry.item) {
+        this.UnequipCyberware(itemData, null, true);
       }
     }
-    if !ok {
-      ArrayPush(plan.missing, e);
-    }
-    k += 1;
   }
+  this.UpdateCapacityBar(false);
+  this.InvalidateMinigridsNextFrame();
+  this.KromQueueStep(KromApplyFramesBetweenSteps());
+  return true;
+}
 
+public func KromApplyFramesBetweenSteps() -> Int32 = 4
+
+@addMethod(RipperDocGameController)
+private func KromFinishApply() -> Void {
+  this.m_hoverArea = this.m_kromSavedHoverArea;
+  this.m_equippedSlotIndex = this.m_kromSavedSlotIndex;
+  this.m_kromBusy = false;
   this.UpdateCapacityBar(false);
   this.UpdateArmorBar(false);
   this.InvalidateMinigridsNextFrame();
   this.RefreshInventoryNextFrame();
-  return plan;
+
+  // Whatever the set asks for that is not installed now could not be installed.
+  let current = this.KromCurrentCyberware();
+  let none: array<KromOwnedItem>;
+  let left = KromPlanLoadout(current, this.m_kromTarget, none);
+  let missing: array<String>;
+  let notInstalled = left.missing;
+  for m in notInstalled {
+    ArrayPush(missing, KromLoadoutsPanel.ItemName(m.item));
+  }
+  if IsDefined(this.m_kromPanel) {
+    this.m_kromPanel.OnApplyFinished(this.m_kromTargetName, missing);
+  }
 }

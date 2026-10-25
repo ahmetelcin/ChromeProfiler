@@ -2,7 +2,7 @@
 // bin/x64/plugins/cyber_engine_tweaks/gamelog.log under [KromSetleri].
 module KromSetleri
 
-public func KromDebug_SelfTest() -> Bool = true
+public func KromDebug_SelfTest() -> Bool = false
 
 // Runs when the player puppet attaches, which also happens in the main-menu scene, so no save is
 // needed. Note for all code here: always store a returned array in a local before using it;

@@ -18,6 +18,7 @@ public abstract class KromText {
   public static func Full() -> String = "En fazla " + ToString(KromSetStore.MaxSets()) + " set kaydedilebilir."
 
   public static func Loaded(name: String) -> String = name + " takıldı"
+  public static func Loading() -> String = "Yükleniyor…"
 
   public static func LoadedWithMissing(name: String, missing: array<String>) -> String {
     let list = "";

@@ -109,7 +109,9 @@ public class KromSetleriSystem extends ScriptableSystem {
   }
 
   public func GetSets() -> array<ref<KromSet>> {
-    return this.Load().GetSets();
+    let store = this.Load();
+    let sets = store.GetSets();
+    return sets;
   }
 
   public func SaveSet(index: Int32, name: String, items: array<KromSlotItem>) -> Bool {
