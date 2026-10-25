@@ -162,18 +162,3 @@ public func KromApplySet(index: Int32) -> ref<KromPlan> {
   this.RefreshInventoryNextFrame();
   return plan;
 }
-
-// Temporary harness (Task 4): logs what the mod reads when a real ripperdoc opens.
-@wrapMethod(RipperDocGameController)
-protected cb func OnInitialize() -> Bool {
-  let result = wrappedMethod();
-  if KromDebug_SelfTest() && this.KromIsRealRipperdoc() {
-    let current = this.KromCurrentCyberware();
-    let owned = this.KromOwnedCyberware();
-    ModLog(n"KromSetleri", "Ripperdoc: installed=" + ToString(ArraySize(current)) + " ownedSpare=" + ToString(ArraySize(owned)));
-    for c in current {
-      ModLog(n"KromSetleri", "  " + ToString(c.area) + "/" + ToString(c.slot) + " " + TDBID.ToStringDEBUG(ItemID.GetTDBID(c.item)));
-    }
-  }
-  return result;
-}
