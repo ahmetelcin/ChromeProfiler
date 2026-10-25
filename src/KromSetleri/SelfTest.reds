@@ -16,8 +16,15 @@ public class KromSelfTestSystem extends ScriptableSystem {
     KromSelfTest_StorageMaxTen();
     KromSelfTest_StorageDelete();
     KromSelfTest_Planner();
+    KromSelfTest_Language();
     ModLog(n"KromSetleri", "SelfTest: done");
   }
+}
+
+// Logs which language the texts use, so a run on a Turkish or an English game can be checked.
+func KromSelfTest_Language() -> Void {
+  ModLog(n"KromSetleri", "Language: turkish=" + ToString(KromText.IsTurkish()) + " title=" + KromText.Title());
+  KromCheck("Text_PicksALanguage", StrLen(KromText.Title()) > 0);
 }
 
 public func KromCheck(name: String, ok: Bool) -> Void {
