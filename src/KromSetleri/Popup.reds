@@ -78,7 +78,8 @@ public class KromLoadoutsPanel {
 
     let details = new inkVerticalPanel();
     details.SetMargin(inkMargin(1180.0, 170.0, 0.0, 0.0));
-    details.SetChildMargin(inkMargin(0.0, 0.0, 0.0, 8.0));
+    // Tight rows so a full body (28+ entries with extra-slot mods) stays above the action buttons.
+    details.SetChildMargin(inkMargin(0.0, 0.0, 0.0, 0.0));
     details.Reparent(frame);
     this.m_details = details;
 
@@ -164,7 +165,7 @@ public class KromLoadoutsPanel {
     ArrayClear(this.m_setButtons);
     let i = 0;
     while i < ArraySize(sets) {
-      let label = (i == this.m_selected ? "▸ " : "") + sets[i].name;
+      let label = (i == this.m_selected ? "> " : "") + sets[i].name + (i == this.m_selected ? " <" : "");
       let button = KromLoadoutsPanel.MakeButton(label, 1000.0);
       button.Reparent(this.m_list);
       button.RegisterToCallback(n"OnBtnClick", this, n"OnPickSet");
@@ -205,7 +206,7 @@ public class KromLoadoutsPanel {
       let available = KromLoadoutsPanel.IsAvailable(entry, equipped, owned);
       let text = KromText.Area(entry.area) + " · " + KromLoadoutsPanel.ItemName(entry.item) + (available ? "" : KromText.NotOwned());
       let color = available ? ThemeColors.PureWhite() : ThemeColors.Bittersweet();
-      KromLoadoutsPanel.MakeText(text, 38, color).Reparent(this.m_details);
+      KromLoadoutsPanel.MakeText(text, 32, color).Reparent(this.m_details);
     }
   }
 
