@@ -2,7 +2,7 @@
 // bin/x64/plugins/cyber_engine_tweaks/gamelog.log under [KromSetleri].
 module KromSetleri
 
-public func KromDebug_SelfTest() -> Bool = false
+public func KromDebug_SelfTest() -> Bool = true
 
 // Runs when the player puppet attaches, which also happens in the main-menu scene, so no save is
 // needed. Note for all code here: always store a returned array in a local before using it;
@@ -159,6 +159,21 @@ public func KromSelfTest_Planner() -> Void {
   ArrayPush(ownedOne, KromOwned(heart, 3));
   p = KromPlanLoadout(none, twoHearts, ownedOne);
   KromCheck("Planner_NoDoubleUseOfOneItem", ArraySize(p.equip) == 1 && ArraySize(p.missing) == 1);
+
+  // Planner_KeepsSameRecordInOtherSlot: the set has Biomonitor in slot 0 and Blood Pump in slot 1,
+  // but Blood Pump is installed in slot 0. Blood Pump must stay; only Biomonitor gets installed.
+  let pump = KromCopy(t"Items.BloodPumpLegendary", 301);
+  let bio = KromCopy(t"Items.HealthMonitorLegendary", 302);
+  let curPump: array<KromSlotItem>;
+  ArrayPush(curPump, KromSlotItem(gamedataEquipmentArea.CardiovascularSystemCW, 0, pump));
+  let wantBoth: array<KromSlotItem>;
+  ArrayPush(wantBoth, KromSlotItem(gamedataEquipmentArea.CardiovascularSystemCW, 0, bio));
+  ArrayPush(wantBoth, KromSlotItem(gamedataEquipmentArea.CardiovascularSystemCW, 1, pump));
+  let ownedBio: array<KromOwnedItem>;
+  ArrayPush(ownedBio, KromOwned(bio, 9));
+  p = KromPlanLoadout(curPump, wantBoth, ownedBio);
+  KromCheck("Planner_KeepsSameRecordInOtherSlot",
+    ArraySize(p.unequip) == 0 && ArraySize(p.equip) == 1 && p.equip[0].item == bio && ArraySize(p.missing) == 0);
 
   // Planner_MissingWhenNotOwned
   let noneOwned: array<KromOwnedItem>;

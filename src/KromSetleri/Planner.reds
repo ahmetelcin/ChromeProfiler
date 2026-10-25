@@ -13,8 +13,10 @@ public class KromPlan {
   public let missing: array<KromSlotItem>;
 }
 
-func KromSameRecordInSlot(a: KromSlotItem, b: KromSlotItem) -> Bool {
-  return Equals(a.area, b.area) && a.slot == b.slot && ItemID.GetTDBID(a.item) == ItemID.GetTDBID(b.item);
+// Same body area and same cyberware record. Slots are ignored on purpose: the game picks the
+// slot itself when installing, so a piece can sit in a different slot than when it was saved.
+func KromSameRecordInArea(a: KromSlotItem, b: KromSlotItem) -> Bool {
+  return Equals(a.area, b.area) && ItemID.GetTDBID(a.item) == ItemID.GetTDBID(b.item);
 }
 
 // Pure planning step: no game calls, so it can be tested at boot.
@@ -25,25 +27,33 @@ public func KromPlanLoadout(equipped: array<KromSlotItem>, target: array<KromSlo
     ArrayPush(used, false);
   }
 
+  // Each installed piece keeps at most one matching set entry, so two copies of a record in the
+  // set need two installed copies to both count as already in place.
+  let satisfied: array<Bool>;
+  for t in target {
+    ArrayPush(satisfied, false);
+  }
   for cur in equipped {
-    let keep = false;
-    for want in target {
-      if KromSameRecordInSlot(cur, want) {
-        keep = true;
+    let match = -1;
+    let i = 0;
+    while i < ArraySize(target) {
+      if match < 0 && !satisfied[i] && KromSameRecordInArea(cur, target[i]) {
+        match = i;
       }
+      i += 1;
     }
-    if !keep {
+    if match < 0 {
       ArrayPush(plan.unequip, cur);
+    } else {
+      satisfied[match] = true;
     }
   }
 
-  for want in target {
-    let already = false;
-    for cur in equipped {
-      if KromSameRecordInSlot(cur, want) {
-        already = true;
-      }
-    }
+  let w = 0;
+  while w < ArraySize(target) {
+    let want = target[w];
+    let already = satisfied[w];
+    w += 1;
     if !already {
       // Exact item first, otherwise the highest-quality unused copy of the same record.
       let pick = -1;
