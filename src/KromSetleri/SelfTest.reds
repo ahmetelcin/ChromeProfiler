@@ -5,22 +5,17 @@ module KromSetleri
 public func KromDebug_SelfTest() -> Bool = true
 
 // Runs when the player puppet attaches, which also happens in the main-menu scene, so no save is
-// needed. Boot-time hooks (ScriptableService OnLoad/OnInitialize) crashed the game when the tests
-// created many CNames that early.
+// needed. Note for all code here: always store a returned array in a local before using it;
+// redscript 0.5 reads a call's temporary array result as freed memory.
 public class KromSelfTestSystem extends ScriptableSystem {
   private func OnPlayerAttach(request: ref<PlayerAttachRequest>) -> Void {
     if !KromDebug_SelfTest() {
       return;
     }
-    // Hypothesis check: does creating many runtime CNames alone crash the game?
-    let n = 0;
-    while n < 30 {
-      let made = StringToName("Krom Hypothesis " + ToString(n));
-      n += 1;
-    }
-    ModLog(n"KromSetleri", "hypothesis: made 30 names");
-    // KromSelfTest_Storage();
-    // KromSelfTest_Planner();
+    KromSelfTest_StorageSave();
+    KromSelfTest_StorageMaxTen();
+    KromSelfTest_StorageDelete();
+    KromSelfTest_Planner();
     ModLog(n"KromSetleri", "SelfTest: done");
   }
 }
@@ -29,13 +24,28 @@ public func KromCheck(name: String, ok: Bool) -> Void {
   ModLog(n"KromSetleri", (ok ? "PASS " : "FAIL ") + name);
 }
 
-public func KromSelfTest_Storage() -> Void {
-  let a = KromSlotItem(gamedataEquipmentArea.SystemReplacementCW, 0, ItemID.FromTDBID(t"Items.AdvancedSandevistanApogeePlusPlus"));
-  let b = KromSlotItem(gamedataEquipmentArea.EyesCW, 0, ItemID.FromTDBID(t"Items.KiroshiOptics"));
+func KromTestA() -> KromSlotItem {
+  return KromSlotItem(gamedataEquipmentArea.SystemReplacementCW, 0, ItemID.FromTDBID(t"Items.AdvancedSandevistanApogeePlusPlus"));
+}
+
+func KromTestB() -> KromSlotItem {
+  return KromSlotItem(gamedataEquipmentArea.EyesCW, 0, ItemID.FromTDBID(t"Items.KiroshiOptics"));
+}
+
+func KromTestTwo() -> array<KromSlotItem> {
+  let two: array<KromSlotItem>;
+  ArrayPush(two, KromTestA());
+  ArrayPush(two, KromTestB());
+  return two;
+}
+
+public func KromSelfTest_StorageSave() -> Void {
+  // ItemID.FromTDBID makes a new random seed on every call, so the set is built from these exact values.
+  let a = KromTestA();
+  let b = KromTestB();
   let two: array<KromSlotItem>;
   ArrayPush(two, a);
   ArrayPush(two, b);
-
   // Storage_SaveAppendsAndReadsBack
   let sys = new KromSetStore();
   let saved = sys.SaveSet(-1, "Netrunner", two);
@@ -44,7 +54,10 @@ public func KromSelfTest_Storage() -> Void {
     saved && ArraySize(sets) == 1 && Equals(sets[0].name, "Netrunner") && ArraySize(sets[0].items) == 2
     && Equals(sets[0].items[0].area, a.area) && sets[0].items[0].slot == a.slot && sets[0].items[0].item == a.item
     && Equals(sets[0].items[1].area, b.area) && sets[0].items[1].item == b.item);
+}
 
+public func KromSelfTest_StorageMaxTen() -> Void {
+  let two = KromTestTwo();
   // Storage_MaxTenSets
   let full = new KromSetStore();
   let i = 0;
@@ -53,12 +66,17 @@ public func KromSelfTest_Storage() -> Void {
     i += 1;
   }
   let eleventh = full.SaveSet(-1, "Set 11", two);
-  let count = ArraySize(full.GetSets());
+  let fullSets = full.GetSets();
+  let count = ArraySize(fullSets);
   KromCheck("Storage_MaxTenSets", KromSetStore.MaxSets() == 10 && !eleventh && count == 10);
   if eleventh || count != 10 {
     ModLog(n"KromSetleri", "  MaxTenSets: max=" + ToString(KromSetStore.MaxSets()) + " eleventh=" + ToString(eleventh) + " count=" + ToString(count));
   }
+}
 
+public func KromSelfTest_StorageDelete() -> Void {
+  let b = KromTestB();
+  let two = KromTestTwo();
   // Storage_DeleteReindexes
   let one: array<KromSlotItem>;
   ArrayPush(one, b);
@@ -74,7 +92,8 @@ public func KromSelfTest_Storage() -> Void {
 
   // Storage_Rename
   abc.RenameSet(0, "Tank");
-  KromCheck("Storage_Rename", Equals(abc.GetSets()[0].name, "Tank"));
+  let renamed = abc.GetSets();
+  KromCheck("Storage_Rename", Equals(renamed[0].name, "Tank"));
 
   // Storage_OverwriteKeepsIndex
   abc.SaveSet(1, "C", two);

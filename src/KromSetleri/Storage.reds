@@ -12,20 +12,25 @@ public class KromSetStore {
 
   public static func MaxSets() -> Int32 = 10
 
+  // Builds each set in a local before adding it: pushing into `sets[i].items` directly
+  // corrupted memory (garbage set counts, then crashes).
   public func GetSets() -> array<ref<KromSet>> {
     let sets: array<ref<KromSet>>;
-    for name in this.setNames {
+    let i = 0;
+    while i < ArraySize(this.setNames) {
       let set = new KromSet();
-      set.name = NameToString(name);
-      ArrayPush(sets, set);
-    }
-    let k = 0;
-    while k < ArraySize(this.entrySet) {
-      let owner = this.entrySet[k];
-      if owner >= 0 && owner < ArraySize(sets) {
-        ArrayPush(sets[owner].items, KromSlotItem(this.entryArea[k], this.entrySlot[k], this.entryItem[k]));
+      set.name = NameToString(this.setNames[i]);
+      let items: array<KromSlotItem>;
+      let k = 0;
+      while k < ArraySize(this.entrySet) {
+        if this.entrySet[k] == i {
+          ArrayPush(items, KromSlotItem(this.entryArea[k], this.entrySlot[k], this.entryItem[k]));
+        }
+        k += 1;
       }
-      k += 1;
+      set.items = items;
+      ArrayPush(sets, set);
+      i += 1;
     }
     return sets;
   }
